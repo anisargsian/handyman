@@ -139,3 +139,113 @@ Example usage:
 ## Render alternative (if preferred)
 
 Use same backend env vars; set root to `backend`, add a managed Postgres database, and point `DATABASE_URL` to Render Postgres. Keep `PUBLIC_URL` and `CORS_ORIGIN` aligned with your live domains.
+
+## Go-live checklist
+
+- Set production domains:
+  - Frontend: `https://www.yourdomain.com` (Vercel)
+  - Backend: `https://cms.yourdomain.com` (Railway/Render)
+- Confirm frontend env vars in Vercel:
+  - `STRAPI_API_URL=https://cms.yourdomain.com/api`
+  - `NEXT_PUBLIC_SITE_URL=https://www.yourdomain.com`
+- Confirm backend env vars in Railway/Render:
+  - `PUBLIC_URL=https://cms.yourdomain.com`
+  - `CORS_ORIGIN=https://www.yourdomain.com`
+  - Cloudinary and all Strapi secret keys are present
+  - Postgres variables are set and valid
+- Redeploy backend first, then redeploy frontend.
+- Verify Strapi admin:
+  - Open `https://cms.yourdomain.com/admin`
+  - Upload an image in Media Library (should store in Cloudinary)
+- API smoke tests:
+  - `GET https://cms.yourdomain.com/api/services`
+  - `GET https://cms.yourdomain.com/api/pages`
+  - `GET https://cms.yourdomain.com/api/blog-posts`
+  - Ensure responses are `200` and include `data`
+- Frontend smoke tests:
+  - Home page loads and featured services render
+  - Services list and at least one `/services/[slug]` page load
+  - Blog list and at least one `/blog/[slug]` page load
+  - Contact form submits successfully
+- SEO checks:
+  - `https://www.yourdomain.com/sitemap.xml` loads
+  - `https://www.yourdomain.com/robots.txt` loads
+  - Page source contains expected `og:` tags and JSON-LD
+- Final hardening:
+  - Rotate any placeholder/local secrets
+  - Remove temporary/test content
+  - Enable monitoring/log alerts in Vercel + Railway/Render
+
+## Launch-day command checklist
+
+Replace domains once, then run:
+
+```bash
+# 1) Set your live domains
+FRONTEND_URL="https://www.yourdomain.com"
+CMS_URL="https://cms.yourdomain.com"
+
+# 2) API health checks (expect HTTP 200)
+curl -I "$CMS_URL/api/services"
+curl -I "$CMS_URL/api/pages"
+curl -I "$CMS_URL/api/blog-posts"
+
+# 3) API content checks (expect JSON containing "data")
+curl "$CMS_URL/api/services" | head
+curl "$CMS_URL/api/pages" | head
+curl "$CMS_URL/api/blog-posts" | head
+
+# 4) Frontend route checks
+curl -I "$FRONTEND_URL/"
+curl -I "$FRONTEND_URL/services"
+curl -I "$FRONTEND_URL/blog"
+curl -I "$FRONTEND_URL/contact"
+
+# 5) SEO checks
+curl -I "$FRONTEND_URL/sitemap.xml"
+curl -I "$FRONTEND_URL/robots.txt"
+curl "$FRONTEND_URL/" | head -n 80
+
+# 6) Quick headers sanity
+# - Frontend pages should return 200
+# - API should return 200 with JSON content type
+# - sitemap.xml and robots.txt should return 200
+```
+
+Windows PowerShell equivalent:
+
+```powershell
+$FRONTEND_URL="https://www.yourdomain.com"
+$CMS_URL="https://cms.yourdomain.com"
+
+curl.exe -I "$CMS_URL/api/services"
+curl.exe -I "$CMS_URL/api/pages"
+curl.exe -I "$CMS_URL/api/blog-posts"
+
+curl.exe -I "$FRONTEND_URL/"
+curl.exe -I "$FRONTEND_URL/services"
+curl.exe -I "$FRONTEND_URL/blog"
+curl.exe -I "$FRONTEND_URL/contact"
+
+curl.exe -I "$FRONTEND_URL/sitemap.xml"
+curl.exe -I "$FRONTEND_URL/robots.txt"
+```
+
+## Expected outputs
+
+- `GET /api/services`, `GET /api/pages`, `GET /api/blog-posts`
+  - Status: `200 OK`
+  - Header includes: `content-type: application/json`
+  - Body includes: `"data":[...]` (or `"data":[]` if empty)
+- Frontend routes (`/`, `/services`, `/blog`, `/contact`)
+  - Status: `200 OK`
+  - Header includes: `content-type: text/html`
+- SEO routes
+  - `/sitemap.xml` -> `200 OK`, `content-type: application/xml` (or `text/xml`)
+  - `/robots.txt` -> `200 OK`, `content-type: text/plain`
+- If you see `401`/`403` on API routes
+  - Public permissions are not enabled for `find` and `findOne` in Strapi
+- If you see `404` on frontend dynamic pages
+  - Confirm Strapi records exist and include valid `slug` values
+- If frontend returns `500`
+  - Re-check `STRAPI_API_URL`, backend `CORS_ORIGIN`, and backend logs
